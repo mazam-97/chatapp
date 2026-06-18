@@ -1,0 +1,61 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chat
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ..
+      dockerfile: ops/backend.Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      JWT_SECRET: supersecret
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/chat
+    depends_on:
+      - postgres
+
+  websocket:
+    build:
+      context: ..
+      dockerfile: ops/websocket.Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      JWT_SECRET: supersecret
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/chat
+    depends_on:
+      - redis
+      - postgres
+      - backend
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: ops/frontend.Dockerfile
+      args:
+        VITE_BACKEND_URL: http://localhost:3001
+        VITE_WS_URL: ws://localhost:8080
+    ports:
+      - "4173:4173"
+    depends_on:
+      - backend
+      - websocket
+
+volumes:
+  pgdata:
